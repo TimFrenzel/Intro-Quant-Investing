@@ -1,11 +1,20 @@
 #Project: InvestmentPortfolio
-#Version: 1.16
+#Version: 1.17
 
 #--------------- Library Management ---------------
-packages_needed <- c("renv", "shiny", "shinyjs", "shinydashboard", "quantmod", "xts", "zoo","ROI","DT","dplyr","PerformanceAnalytics", "TTR", "PortfolioAnalytics","plotly", "lubridate", "ggplot2", "reshape2", "shinythemes")
+packages_needed <- c("renv", "shiny", "shinyjs", "shinydashboard", "quantmod", "xts", "zoo","ROI","DT","dplyr","PerformanceAnalytics", "TTR", "PortfolioAnalytics","plotly", "lubridate", "ggplot2", "reshape2", "shinythemes","gridExtra")
 new_packages <- packages_needed[!packages_needed %in% installed.packages()[, "Package"]]
 if (length(new_packages)) install.packages(new_packages)
 lapply(packages_needed, library, character.only = TRUE)
+
+#--------------- Function Management ---------------
+# Source the CPPI Strategy function
+source("Investment Strategies/CPPI/code/CPPI.R")
+
+#--------------- Data Management ---------------
+# Define a list of ETF tickers
+etf_tickers <- c("SPY", "AGG", "QQQ", "IWM", "EFA", "EEM", "TLT", "IEF", "LQD", "GLD")
+
 
 #--------------- Utility Functions ---------------
 isNewQuarter <- function(date, previousDate) {
@@ -69,14 +78,15 @@ ui <- dashboardPage(
   dashboardHeader(title = "Investment Portfolio Analysis"),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Analysis", tabName = "analysis", icon = icon("dashboard")),
+      menuItem("Analysis", tabName = "analysis", icon = icon("home")),
       menuItem("Allocation", tabName = "allocation", icon = icon("area-chart")),
-      menuItem("Efficient Frontier", tabName = "efficientFrontier", icon = icon("line-chart"))
+      menuItem("Efficient Frontier", tabName = "efficientFrontier", icon = icon("line-chart")),
+      menuItem("CPPI Strategy", tabName = "cppiStrategy", icon = icon("dashboard"))
     ),
     actionButton("runAnalysis", "Run Analysis", class = "btn-primary"),
     dateInput("startDate", "Start Date", value = "2023-12-31"),
     dateInput("endDate", "End Date", value = Sys.Date()),
-    selectInput("symbols", "Symbols", choices = c("SPY", "AGG", "QQQ", "IWM", "EFA", "EEM", "TLT", "IEF", "LQD", "GLD"), multiple = TRUE, selected = c("SPY", "AGG")),
+    selectInput("symbols", "Symbols", choices = etf_tickers, multiple = TRUE, selected = c("SPY", "AGG")),
     uiOutput("benchmarkWeightsUI"),
     uiOutput("fundWeightsUI")
   ),
@@ -84,6 +94,7 @@ ui <- dashboardPage(
     useShinyjs(),
     extendShinyjs(text = jsCode, functions = c("runAnalysis")),
     tags$head(tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS_HTML")),
+    
     tabItems(
       # Tab for Analysis
       tabItem(tabName = "analysis",
@@ -98,6 +109,7 @@ ui <- dashboardPage(
                 box(DT::dataTableOutput("performanceMetricsTable"), title = "Performance Metrics", width = 12)
               )
       ),
+      
       # Tab for Allocation
       tabItem(tabName = "allocation",
               fluidRow(
@@ -105,19 +117,42 @@ ui <- dashboardPage(
                 box(plotOutput("fundAllocationPlot"), title = "Fund Allocation", width = 6)
               )
       ),
+      
       # Tab for Efficient Frontier
       tabItem(tabName = "efficientFrontier",
               fluidRow(
                 box(plotlyOutput("efficientFrontierPlot"), title = "Efficient Frontier", width = 12)
               )
+      ),
+      
+      # Tab for CPPI Strategy
+      tabItem(tabName = "cppiStrategy",
+              div(style = "margin-left: 20px;",  # Margin for layout spacing
+                  fluidRow(
+                    selectInput("riskyAsset", "Select Risky Asset", choices = etf_tickers, selected = c("SPY")),
+                    selectInput("safeAsset", "Select Safe Asset", choices = etf_tickers, selected = c("AGG"))
+                  ),
+                  fluidRow(
+                    sliderInput("floorSlider", "Set Floor (%)", min = 0, max = 100, value = 80),
+                    sliderInput("multiplierSlider", "Set Multiplier", min = 1, max = 10, value = 3)
+                  ),
+                  fluidRow(
+                    dateRangeInput("dateRange", "Select Date Range", start = Sys.Date() - 365, end = Sys.Date())
+                  ),
+                  uiOutput("errorDisplay"),
+                  plotOutput("cppiResults")
+              )
       )
     ),
-    # Author label and version number
+    
+    # Additional UI elements such as author label and version number
     absolutePanel(
       bottom = 10, right = 10, 
       style = "background: transparent; color: #555; font-size: 9px;",
-      HTML("Author: Prof.Frenzel <br> Version: 1.10")
+      HTML("Author: Prof.Frenzel <br> Version: 1.17")
     ),
+    
+    # Theme setting for the dashboard
     theme = shinytheme("sandstone")
   )
 )
@@ -126,7 +161,15 @@ ui <- dashboardPage(
 server <- function(input, output, session) {
   # Initialize reactive value for loading state
   loading_state <- reactiveVal(TRUE)
+  errorText <- reactiveVal("")
   
+  # Properly define outputs for error message display
+  output$errorDisplay <- renderUI({
+    if (!is.null(errorText()) && errorText() != "") {
+      div(style = "color: red;", strong("Error: "), errorText())
+    }
+  })
+
   # Output for conditionalPanel to listen to for showing/hiding loading message
   output$loading <- reactive({ loading_state() })
   outputOptions(output, "loading", suspendWhenHidden = FALSE)
@@ -266,6 +309,70 @@ server <- function(input, output, session) {
       scale_color_manual(values = c("Benchmark" = "#2C3E50", "Fund" = "#E74C3C")) +
       theme(legend.title = element_blank(), legend.position = "top")
   })
+  
+  #--------------- Strategies ---------------
+  # CPPI Strategy
+  output$cppiResults <- renderPlot({
+    req(input$riskyAsset, input$safeAsset, input$floorSlider, input$multiplierSlider, input$dateRange)
+    
+    tryCatch({
+      risky_data <- getSymbols(input$riskyAsset, src = "yahoo", from = input$dateRange[1], to = input$dateRange[2], auto.assign = FALSE)
+      safe_data <- getSymbols(input$safeAsset, src = "yahoo", from = input$dateRange[1], to = input$dateRange[2], auto.assign = FALSE)
+      
+      risky_returns <- dailyReturn(Cl(risky_data))
+      safe_returns <- dailyReturn(Cl(safe_data))
+      
+      floor_value <- input$floorSlider / 100  # Convert from percentage to decimal
+      cppi_results <- cppi_strategy(as.numeric(risky_returns), as.numeric(safe_returns), index(risky_returns),
+                                    floor = floor_value, multiplier = input$multiplierSlider)
+      
+      # Initialize each index at 100
+      initial_value <- 100
+      cum_risky <- cumprod(c(initial_value, 1 + risky_returns[-1]))
+      cum_safe <- cumprod(c(initial_value, 1 + safe_returns[-1]))
+      cum_cppi <- cumprod(c(initial_value, 1 + cppi_results$portfolio_returns[-1]))
+      
+      cum_returns_df <- data.frame(
+        Date = c(index(risky_returns)[1], index(risky_returns)[-1]),
+        Risky = cum_risky,
+        Safe = cum_safe,
+        CPPI = cum_cppi,
+        Floor = rep(floor_value * 100, length(cum_cppi))  # Convert to percentage
+      )
+      
+      colnames(cum_returns_df) <- c("Date","Risky","Safe","CPPI","Floor")
+      print(head(cum_returns_df))  # Debugging output
+      global_floor_value <<- cum_returns_df$Floor
+
+      # Calculating scale for the secondary axis based on the floor value
+      min_floor <- floor_value * 100 * 0.8
+      max_floor <- floor_value * 100 * 1.2
+      
+      # Plot using ggplot
+      gg <- ggplot(cum_returns_df, aes(x = Date)) +
+        geom_line(aes(y = Risky, colour = "Risky"), size = 1) +
+        geom_line(aes(y = Safe, colour = "Safe"), size = 1) +
+        geom_line(aes(y = CPPI, colour = "CPPI"), size = 2) +
+        geom_line(aes(y = Floor, colour = "Floor"), size = 1) +
+        scale_y_continuous(name = "Cumulative Returns", labels = scales::percent_format(),
+                           sec.axis = sec_axis(~ . / 100, name = "Floor Value (%)",
+                                               breaks = seq(min_floor, max_floor, length.out = 5))) +
+        scale_colour_manual(values = c("Risky" = "black", "Safe" = "grey", "CPPI" = "blue", "Floor" = "red")) +
+        theme_minimal() +
+        labs(title = "Cumulative Returns Comparison", y = "Cumulative Returns", x = "Date")
+      
+      gg
+    }, error = function(e) {
+      print(e$message)
+      NULL
+    })
+  })
+  
+  
+  
+  
+  
+  
   
   #--------------- Performance Metrics Table Rendering ---------------
   output$performanceMetricsTable <- DT::renderDataTable({

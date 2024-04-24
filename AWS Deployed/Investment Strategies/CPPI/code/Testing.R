@@ -38,7 +38,13 @@ floor <- 0.8  # Initial portfolio value
 multiplier <- 4  # Level of exposure to the risky asset
 
 # Apply the CPPI strategy
-cppi_result <- cppi_strategy(as.numeric(spy_returns), as.numeric(agg_returns), floor, multiplier, dates)
+cppi_result <- cppi_strategy(
+  risky_returns = as.numeric(spy_returns), 
+  safe_returns = as.numeric(agg_returns), 
+  dates = dates, 
+  floor = floor, 
+  multiplier = multiplier
+)
 
 #--------------- Visualize Cumulative Returns ---------------
 cum_spy_returns <- cumprod(1 + spy_returns[-1]) - 1
