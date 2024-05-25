@@ -1,0 +1,292 @@
+
+import dash
+from dash import dcc, html, dash_table
+from dash.dependencies import Input, Output
+from datetime import datetime as dt
+import plotly.graph_objects as go
+import pandas as pd
+from mainMinVar import runFactorPortfolio3
+
+# Initialize Dash app
+app = dash.Dash(__name__)
+
+# Define layout
+app.layout = html.Div([
+    html.Label('Start Date - After or = 12/31/2009'),
+    dcc.DatePickerSingle(
+        id='date-1-picker',
+        date=dt.today()
+    ),
+    html.Label('End Date - Before or = 3/6/2023'),
+    dcc.DatePickerSingle(
+        id='date-2-picker',
+        date=dt.today()
+    ),
+    html.Label('Beta Lookback Options: 6 Months(Enter 126) - 1 Year(Enter 252) - 3 Year(Enter 756)'),
+    dcc.Input(
+        id='val1-input',
+        type='number',
+        value=0
+    ),
+    html.Label('Beta grouping options: Daily(Enter 1) - Monthly(Enter 28)'),
+    dcc.Input(
+        id='val2-input',
+        type='number',
+        value=0
+    ),
+    html.Button('Run', id='run-button', n_clicks=0),
+    dcc.Graph(id='graph-output'),  # Graph component for displaying the graph
+    html.Div(id='table-output')  # Div for displaying the table
+])
+
+# Define callback to run the function
+@app.callback(
+    [Output('graph-output', 'figure'), Output('table-output', 'children')],  # Output for graph and table
+    [Input('run-button', 'n_clicks')],
+    [dash.dependencies.State('date-1-picker', 'date'),
+     dash.dependencies.State('date-2-picker', 'date'),
+     dash.dependencies.State('val1-input', 'value'),
+     dash.dependencies.State('val2-input', 'value')]
+)
+def run_function(n_clicks, date_1, date_2, val1, val2):
+    if n_clicks > 0:
+        # Call your function with provided inputs
+        outputDF, portfolioXVals, portfolioYVals, marketXVals, marketYVals = runFactorPortfolio3(date_1, date_2, val1, val2, 'S')
+
+        # Prepare data for the graph
+        portfolio_df = pd.DataFrame({'Dates': portfolioXVals, 'Portfolio': portfolioYVals})
+        market_df = pd.DataFrame({'Dates': marketXVals, 'S&P': marketYVals})
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add portfolio line
+        fig.add_trace(go.Scatter(x=marketXVals, y=portfolioYVals, mode='lines', name='Portfolio'))
+
+        # Add S&P line
+        fig.add_trace(go.Scatter(x=marketXVals, y=marketYVals, mode='lines', name='S&P'))
+
+        fig.update_layout(title='Portfolio vs S&P', xaxis_title='Date', yaxis_title='Value')
+        fig.update_yaxes(range=[0, 500])  # Set the bounds of the y-axis
+
+        # Prepare data for the table
+        table = dash_table.DataTable(
+            id='table',
+            columns=[{"name": i, "id": i} for i in outputDF.columns],
+            data=outputDF.to_dict('records')
+        )
+
+        return fig, table  # Return the figure and table
+
+    else:
+        return go.Figure(), html.Div()  # Return empty figure and empty div for the table
+
+# Run the Dash app
+if __name__ == '__main__':
+    app.run_server(debug=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import dash
+from dash import dcc, html, dash_table
+from dash.dependencies import Input, Output
+from datetime import datetime as dt
+import plotly.graph_objects as go
+import pandas as pd
+from mainMinVar import runFactorPortfolio3
+
+# Initialize Dash app
+app = dash.Dash(__name__)
+
+# Define layout
+app.layout = html.Div([
+    html.Label('Start Date - After or = 12/31/2009'),
+    dcc.DatePickerSingle(
+        id='date-1-picker',
+        date=dt.today()
+    ),
+    html.Label('End Date - Before or = 3/6/2023'),
+    dcc.DatePickerSingle(
+        id='date-2-picker',
+        date=dt.today()
+    ),
+    html.Label('Beta Lookback Options: 6 Months(Enter 126) - 1 Year(Enter 252) - 3 Year(Enter 756)'),
+    dcc.Input(
+        id='val1-input',
+        type='number',
+        value=0
+    ),
+    html.Label('Beta grouping options: Daily(Enter 1) - Monthly(Enter 28)'),
+    dcc.Input(
+        id='val2-input',
+        type='number',
+        value=0
+    ),
+    html.Button('Run', id='run-button', n_clicks=0),
+    dcc.Graph(id='graph-output'),  # Graph component for displaying the graph
+    html.Div(id='table-output')  # Div for displaying the table
+])
+
+# Define callback to run the function
+@app.callback(
+    [Output('graph-output', 'figure'), Output('table-output', 'children')],  # Output for graph and table
+    [Input('run-button', 'n_clicks')],
+    [dash.dependencies.State('date-1-picker', 'date'),
+     dash.dependencies.State('date-2-picker', 'date'),
+     dash.dependencies.State('val1-input', 'value'),
+     dash.dependencies.State('val2-input', 'value')]
+)
+def run_function(n_clicks, date_1, date_2, val1, val2):
+    if n_clicks > 0:
+        # Call your function with provided inputs
+        outputDF, portfolioXVals, portfolioYVals, marketXVals, marketYVals = runFactorPortfolio3(date_1, date_2, val1, val2)
+
+        # Prepare data for the graph
+        portfolio_df = pd.DataFrame({'Dates': portfolioXVals, 'Portfolio': portfolioYVals})
+        market_df = pd.DataFrame({'Dates': marketXVals, 'S&P': marketYVals})
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add portfolio line
+        fig.add_trace(go.Scatter(x=marketXVals, y=portfolioYVals, mode='lines', name='Portfolio'))
+
+        # Add S&P line
+        fig.add_trace(go.Scatter(x=marketXVals, y=marketYVals, mode='lines', name='S&P'))
+
+        fig.update_layout(title='Portfolio vs S&P', xaxis_title='Date', yaxis_title='Value')
+        fig.update_yaxes(range=[0, 500])  # Set the bounds of the y-axis
+
+        # Prepare data for the table
+        table = dash_table.DataTable(
+            id='table',
+            columns=[{"name": i, "id": i} for i in outputDF.columns],
+            data=outputDF.to_dict('records')
+        )
+
+        return fig, table  # Return the figure and table
+
+    else:
+        return go.Figure(), html.Div()  # Return empty figure and empty div for the table
+
+# Run the Dash app
+if __name__ == '__main__':
+    app.run_server(debug=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import dash
+from dash import dcc, html
+from dash.dependencies import Input, Output
+from datetime import datetime as dt
+import plotly.graph_objects as go  # Importing go instead of px for greater control
+import pandas as pd
+from mainMinVar import runFactorPortfolio3
+
+# Initialize Dash app
+app = dash.Dash(__name__)
+
+# Define layout
+app.layout = html.Div([
+    html.Label('Start Date - After or = 12/31/2009'),
+    dcc.DatePickerSingle(
+        id='date-1-picker',
+        date=dt.today()
+    ),
+    html.Label('End Date - Before or = 3/6/2023'),
+    dcc.DatePickerSingle(
+        id='date-2-picker',
+        date=dt.today()
+    ),
+    html.Label('Beta Lookback Options: 6 Months(Enter 126) - 1 Year(Enter 252) - 3 Year(Enter 756)'),
+    dcc.Input(
+        id='val1-input',
+        type='number',
+        value=0
+    ),
+    html.Label('Beta grouping options: Daily(Enter 1) - Monthly(Enter 28)'),
+    dcc.Input(
+        id='val2-input',
+        type='number',
+        value=0
+    ),
+    html.Button('Run', id='run-button', n_clicks=0),
+    dcc.Graph(id='graph-output')  # Graph component for displaying the graph
+])
+
+# Define callback to run the function
+@app.callback(
+    Output('graph-output', 'figure'),  # Output for graph
+    [Input('run-button', 'n_clicks')],
+    [dash.dependencies.State('date-1-picker', 'date'),
+     dash.dependencies.State('date-2-picker', 'date'),
+     dash.dependencies.State('val1-input', 'value'),
+     dash.dependencies.State('val2-input', 'value')]
+)
+def run_function(n_clicks, date_1, date_2, val1, val2):
+    if n_clicks > 0:
+        # Call your function with provided inputs
+        outputDF, portfolioXVals, portfolioYVals, marketXVals, marketYVals = runFactorPortfolio3(date_1, date_2, val1, val2)
+
+        # Prepare data for the graph
+        portfolio_df = pd.DataFrame({'Dates': portfolioXVals, 'Portfolio': portfolioYVals})
+        market_df = pd.DataFrame({'Dates': marketXVals, 'S&P': marketYVals})
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add portfolio line
+        # fig.add_trace(go.Scatter(x=portfolioXVals, y=portfolioYVals, mode='lines', name='Portfolio'))
+
+        # # Add S&P line
+        # fig.add_trace(go.Scatter(x=marketXVals, y=marketYVals, mode='lines', name='S&P'))
+
+        # fig.update_layout(title='Portfolio vs S&P', xaxis_title='Date', yaxis_title='Value')
+        
+        fig.add_trace(go.Scatter(x=marketXVals, y=marketYVals, mode='lines', name='Portfolio'))
+
+        # Add S&P line
+        fig.add_trace(go.Scatter(x=marketXVals, y=portfolioYVals, mode='lines', name='S&P'))
+
+        fig.update_layout(title='Portfolio vs S&P', xaxis_title='Date', yaxis_title='Value')
+        
+        fig.update_yaxes(range=[0, 500])  # Set the bounds of the y-axis
+
+        return fig  # Return the figure
+
+    else:
+        return go.Figure()  # Return empty figure
+
+# Run the Dash app
+if __name__ == '__main__':
+    app.run_server(debug=True)
